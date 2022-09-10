@@ -13,34 +13,40 @@ class ContextAwareJsonFormatter extends JsonFormatter
         protected ContextInterface $context,
         int $batchMode = self::BATCH_MODE_JSON,
         bool $appendNewline = true,
+        bool $ignoreEmptyContextAndExtra = false,
+        bool $includeStacktraces = false,
         protected string $jsonDateFormat = 'Y-m-d\TH:i:s.uP',
         protected int $version = 0,
     ) {
-        parent::__construct($batchMode, $appendNewline);
+        parent::__construct($batchMode, $appendNewline, $ignoreEmptyContextAndExtra, $includeStacktraces);
     }
 
-    /**
-     * @param array<string,mixed> $record
-     *
-     * @return array<string,mixed>
-     */
     protected function getReformattedRecord(LogRecord $record): LogRecord
     {
-        $cloned = clone($record);
-
         $additionalExtras = $this->context->getLogValues();
 
-        $cloned->context = array_merge($record->context, [
-            'msg'        => $record->message,
-            'channel'    => $record->channel,
-            'level'      => $record->level->value,
-            'level_name' => $record->level->getName(),
-            'time'       => $record->datetime->format($this->jsonDateFormat),
-            'extra'      => array_merge($record->extra, $additionalExtras),
-            'v'          => $this->version,
-        ]);
+        $extras = array_merge($record->extra, $additionalExtras);
 
-        return $cloned;
+        return new LogRecord(
+            $record->datetime,
+            $record->channel,
+            $record->level,
+            $record->message,
+            array_merge(
+                $record->context,
+                [
+                    'msg'        => $record->message,
+                    'channel'    => $record->channel,
+                    'level'      => $record->level->value,
+                    'level_name' => $record->level->getName(),
+                    'time'       => $record->datetime->format($this->jsonDateFormat),
+                    'extra'      => array_merge($record->extra, $additionalExtras),
+                    'v'          => $this->version,
+                ],
+            ),
+            $extras,
+            $record->formatted,
+        );
     }
 
     public function format(LogRecord $record): string
@@ -48,11 +54,10 @@ class ContextAwareJsonFormatter extends JsonFormatter
         return parent::format($this->getReformattedRecord($record));
     }
 
-    /** @param array<array<string,mixed>> $records */
     protected function formatBatchJson(array $records): string
     {
         return parent::formatBatchJson(
-            array_map(fn(LogRecord $record) => $this->getReformattedRecord($record), $records),
+            array_map(fn (LogRecord $record) => $this->getReformattedRecord($record), $records),
         );
     }
 }
