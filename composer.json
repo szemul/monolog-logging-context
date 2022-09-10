@@ -5,7 +5,7 @@
     "minimum-stability": "stable",
     "require": {
         "php": "^8.0",
-        "monolog/monolog": "^2.3.2",
+        "monolog/monolog": "^3.0.0",
         "szemul/logging-error-handling-context": "^1.0.0"
     },
     "require-dev": {

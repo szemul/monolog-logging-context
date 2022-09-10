@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Szemul\MonologLoggingContext\Formatter;
 
 use Monolog\Formatter\JsonFormatter;
+use Monolog\LogRecord;
 use Szemul\LoggingErrorHandlingContext\ContextInterface;
 
 class ContextAwareJsonFormatter extends JsonFormatter
@@ -13,6 +14,7 @@ class ContextAwareJsonFormatter extends JsonFormatter
         int $batchMode = self::BATCH_MODE_JSON,
         bool $appendNewline = true,
         protected string $jsonDateFormat = 'Y-m-d\TH:i:s.uP',
+        protected int $version = 0,
     ) {
         parent::__construct($batchMode, $appendNewline);
     }
@@ -22,28 +24,26 @@ class ContextAwareJsonFormatter extends JsonFormatter
      *
      * @return array<string,mixed>
      */
-    protected function getReformattedRecord(array $record): array
+    protected function getReformattedRecord(LogRecord $record): LogRecord
     {
+        $cloned = clone($record);
+
         $additionalExtras = $this->context->getLogValues();
 
-        $record['extra'] = array_merge($record['extra'] ?? [], $additionalExtras);
+        $cloned->context = array_merge($record->context, [
+            'msg'        => $record->message,
+            'channel'    => $record->channel,
+            'level'      => $record->level->value,
+            'level_name' => $record->level->getName(),
+            'time'       => $record->datetime->format($this->jsonDateFormat),
+            'extra'      => array_merge($record->extra, $additionalExtras),
+            'v'          => $this->version,
+        ]);
 
-        return array_merge(
-            $record['context'],
-            [
-                'msg'        => $record['message'],
-                'channel'    => $record['channel'],
-                'level'      => $record['level'],
-                'level_name' => $record['level_name'],
-                'time'       => $record['datetime']->format($this->jsonDateFormat),
-                'extra'      => $record['extra'],
-                'v'          => 0,
-            ],
-        );
+        return $cloned;
     }
 
-    /** @param array<string,mixed> $record */
-    public function format(array $record): string
+    public function format(LogRecord $record): string
     {
         return parent::format($this->getReformattedRecord($record));
     }
@@ -51,6 +51,8 @@ class ContextAwareJsonFormatter extends JsonFormatter
     /** @param array<array<string,mixed>> $records */
     protected function formatBatchJson(array $records): string
     {
-        return parent::formatBatchJson(array_map(fn (array $record) => $this->getReformattedRecord($record), $records));
+        return parent::formatBatchJson(
+            array_map(fn(LogRecord $record) => $this->getReformattedRecord($record), $records),
+        );
     }
 }
